@@ -1,10 +1,21 @@
 /**
- * Firestoreに初期データをセットアップするスクリプト
- * 実行方法: npx tsx scripts/setupFirestore.ts
+ * Firestoreに初期データをセットアップするスクリプト (Admin SDK版)
+ * 実行方法: npx tsx scripts/setupFirestoreAdmin.ts
+ * 
+ * 注意: このスクリプトはFirebase Admin SDKを使用します
+ * サービスアカウントキーが必要な場合は、環境変数 GOOGLE_APPLICATION_CREDENTIALS を設定してください
  */
 
-import { db } from '../src/utils/firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import * as admin from 'firebase-admin';
+
+// Firebase Admin SDKの初期化
+if (!admin.apps.length) {
+  admin.initializeApp({
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'your-project-id',
+  });
+}
+
+const db = admin.firestore();
 
 async function setupFirestore() {
   try {
@@ -13,13 +24,13 @@ async function setupFirestore() {
 
     // 1. 店舗情報の初期データを設定 (stores コレクション)
     console.log('【1/3】stores コレクションを初期化中...');
-    const storeRef = doc(db, 'stores', 'kimura');
-    await setDoc(storeRef, {
+    const storeRef = db.collection('stores').doc('kimura');
+    await storeRef.set({
       currentTicketNumber: 0,      // 現在呼び出し中の整理券番号
       lastIssuedTicketNumber: 0,   // 最後に発行した整理券番号
       waitingGroups: 0,             // 現在待っている組数
       isAccepting: true,            // 整理券の発行を受け付けているか
-      updatedAt: serverTimestamp()  // 最終更新日時
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     console.log('✓ stores/kimura ドキュメントを作成しました');
     console.log('  - currentTicketNumber: 0');
@@ -30,10 +41,10 @@ async function setupFirestore() {
 
     // 2. 呼び出し番号管理用コレクション (Cloud Functions用)
     console.log('【2/3】callNumbers コレクションを初期化中...');
-    const callNumbersRef = doc(db, 'callNumbers', 'current');
-    await setDoc(callNumbersRef, {
+    const callNumbersRef = db.collection('callNumbers').doc('current');
+    await callNumbersRef.set({
       currentNumber: 0,
-      updatedAt: serverTimestamp()
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     console.log('✓ callNumbers/current ドキュメントを作成しました');
     console.log('  - currentNumber: 0');
@@ -41,11 +52,11 @@ async function setupFirestore() {
 
     // 3. 旧システム互換用 (オプション: 既存のコードがあれば)
     console.log('【3/3】storeInfo コレクションを初期化中 (旧システム互換用)...');
-    const storeInfoRef = doc(db, 'storeInfo', 'current');
-    await setDoc(storeInfoRef, {
+    const storeInfoRef = db.collection('storeInfo').doc('current');
+    await storeInfoRef.set({
       callNumber: 0,
       todaySpecial: '本日は鮮度抜群のマグロが入荷しました!\nぜひお試しください。',
-      updatedAt: serverTimestamp()
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     console.log('✓ storeInfo/current ドキュメントを作成しました');
     console.log('');
@@ -67,6 +78,8 @@ async function setupFirestore() {
     console.log('  4. npm run dev でアプリを起動');
     console.log('  5. firebase deploy --only functions でCloud Functionsをデプロイ');
     console.log('');
+
+    process.exit(0);
     
   } catch (error) {
     console.error('❌ エラーが発生しました:', error);

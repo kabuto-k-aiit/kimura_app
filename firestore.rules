@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===================================
+    // 店舗情報: stores コレクション
+    // ===================================
+    // 読み取りは誰でも可能、書き込みは管理者のみ
+    match /stores/{storeId} {
+      allow read: if true;
+      // 書き込みは管理画面のサーバーサイド処理でのみ許可
+      // 本番環境では認証ユーザーかつ管理者ロールを持つ場合のみ許可するよう変更推奨
+      allow write: if false;
+    }
+    
+    // ===================================
+    // 整理券: tickets コレクション
+    // ===================================
+    match /tickets/{ticketId} {
+      // 作成: 認証済みユーザーで、userIdが自分のUIDと一致する場合のみ
+      allow create: if request.auth != null && 
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasAll(['ticketNumber', 'status', 'issuedAt', 'userId', 'numberOfPeople']);
+      
+      // 読み取り: 認証済みユーザーで、自分の整理券または管理者の場合
+      allow read: if request.auth != null && 
+                     (resource.data.userId == request.auth.uid || 
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      
+      // 更新・削除: 管理者のみ
+      allow update, delete: if request.auth != null && 
+                               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // ===================================
+    // 呼び出し番号: callNumbers コレクション
+    // ===================================
+    // Cloud Functions用コレクション
+    match /callNumbers/{docId} {
+      allow read: if true;
+      // 書き込みはCloud Functionsまたは管理画面から
+      allow write: if false;
+    }
+    
+    // ===================================
+    // 旧システム互換用: storeInfo コレクション
+    // ===================================
+    match /storeInfo/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    
+    // ===================================
+    // ユーザー情報 (オプション)
+    // ===================================
+    // 管理者ロールを管理する場合に使用
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false; // 管理者のみが設定
+    }
+  }
+}
