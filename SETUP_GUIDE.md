@@ -82,16 +82,102 @@ NEXT_PUBLIC_LIFF_ID="1234567890-AbCdEfGh"
 
 ### 5. Firestoreの初期設定
 
+#### 方法1: Firebase Consoleから手動で作成（推奨）
+
+最も簡単で確実な方法です。
+
+1. [Firebase Console](https://console.firebase.google.com/) にアクセス
+2. プロジェクトを選択
+3. 左メニューから「Firestore Database」を選択
+4. 「コレクションを開始」をクリック
+
+**stores コレクション**を作成:
+- コレクションID: `stores`
+- ドキュメントID: `kimura`
+- フィールド:
+  - `currentTicketNumber`: 0 (number)
+  - `lastIssuedTicketNumber`: 0 (number)
+  - `waitingGroups`: 0 (number)
+  - `isAccepting`: true (boolean)
+  - `updatedAt`: (timestamp)
+
+**callNumbers コレクション**を作成:
+- コレクションID: `callNumbers`
+- ドキュメントID: `current`
+- フィールド:
+  - `currentNumber`: 0 (number)
+  - `updatedAt`: (timestamp)
+
+詳細は [Firestoreセットアップガイド](./docs/FIRESTORE_SETUP.md) を参照してください。
+
+#### 方法2: スクリプトで自動作成
+
+`.env.local` が正しく設定されている場合:
+
 ```bash
 npx tsx scripts/setupFirestore.ts
 ```
 
-このスクリプトは以下を実行します:
-- `storeInfo/current` ドキュメントに初期データを設定
-  - `callNumber`: 0
-  - `todaySpecial`: デフォルトメッセージ
+エラーが発生する場合は、方法1（手動作成）を使用してください。
 
-### 6. 開発サーバーの起動
+### 6. Firebase Cloud Functionsのセットアップ(LINE通知機能)
+
+#### 6.1 LINEチャンネルアクセストークンの取得
+
+1. [LINE Developers Console](https://developers.line.biz/console/) にアクセス
+2. Messaging APIチャネルの「Messaging API」タブを開く
+3. 「チャンネルアクセストークン(長期)」を発行
+4. トークンをコピー
+
+#### 6.2 環境変数の設定
+
+`functions/.env` ファイルを編集して、LINEチャンネルアクセストークンを設定:
+
+```bash
+LINE_CHANNEL_ACCESS_TOKEN=your_actual_channel_access_token_here
+```
+
+#### 6.3 Firebase CLIのインストールとログイン
+
+```bash
+# Firebase CLIをグローバルインストール
+npm install -g firebase-tools
+
+# Firebaseにログイン
+firebase login
+
+# プロジェクトを初期化(既に設定済みの場合はスキップ)
+firebase init
+```
+
+#### 6.4 Cloud Functionsのデプロイ
+
+```bash
+# functionsディレクトリに移動
+cd functions
+
+# ビルド
+npm run build
+
+# デプロイ
+firebase deploy --only functions
+```
+
+または、プロジェクトルートから:
+
+```bash
+firebase deploy --only functions
+```
+
+#### 6.5 Cloud Functionsの動作確認
+
+デプロイ後、以下のURLでテスト通知を送信できます:
+
+```
+https://asia-northeast1-[YOUR-PROJECT-ID].cloudfunctions.net/sendTestNotification?userId=[LINE_USER_ID]
+```
+
+### 7. 開発サーバーの起動
 
 ```bash
 npm run dev
@@ -101,7 +187,7 @@ npm run dev
 - お客様向けページ: http://localhost:3000/customer
 - 管理画面: http://localhost:3000/admin
 
-### 7. LIFFアプリのテスト
+### 8. LIFFアプリのテスト
 
 #### 方法1: LINE公式アカウントでテスト(推奨)
 
@@ -151,9 +237,24 @@ ngrok http 3000
   lineUserId: string,        // LINEユーザーID
   ticketNumber: number,      // 整理券番号
   issuedAt: Timestamp,       // 発行日時
-  status: string             // 状態: 'waiting' | 'called' | 'completed'
+  status: string,            // 状態: 'waiting' | 'called' | 'completed'
+  notified: boolean,         // LINE通知済みフラグ
+  notifiedAt: Timestamp      // 通知日時
 }
 ```
+
+### `callNumbers` コレクション
+
+呼び出し番号の管理(Cloud Functions用):
+
+```typescript
+{
+  currentNumber: number,     // 現在の呼び出し番号
+  updatedAt: Timestamp       // 最終更新日時
+}
+```
+
+**注**: Cloud Functionsが`callNumbers`コレクションの更新を監視し、自動的にLINE通知を送信します。
 
 ## 使用方法
 
